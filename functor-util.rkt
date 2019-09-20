@@ -65,6 +65,7 @@
       [e #'e]))
   (with-syntax ([expr (loop ee)])
     (with-syntax ([((stxvar stxconstexp) ...) (reverse racc)])
-      #`(#%plain-lambda (intro)
-          (let-values ([(stxvar) (intro stxconstexp)] ...)
-            expr)))))
+      (syntax-protect
+       #`(#%plain-lambda (intro)
+           (let-values ([(stxvar) (#%plain-app intro stxconstexp)] ...)
+             expr))))))
