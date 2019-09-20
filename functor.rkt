@@ -4,7 +4,13 @@
 
 ;; ============================================================
 
-;; FIXME: catch lifts?
+;; This library implements syntax functors: mappings from bindings to macro definitions.
+
+;; It implements two kinds of parameterization: explicit and implicit. Explicit parameters
+;; are listed as arguments when the functor is defined and references must be supplied when
+;; the functor is applied. Implicit parameters are not listed; they given symbolically
+;; when the functor is applied. It's probably a bad idea to allow implicit parameterization
+;; by default; a functor should have to opt in to allow them.
 
 ;; A (Syntax) Functor is written
 ;; - (define-functor (f <sig-id>) def ...)
@@ -13,6 +19,7 @@
 ;; TODO:
 ;; - add by-name application?
 ;; - add optional parameters (beware letrec-scoping for [id id] params!)
+;; - fix export renaming (eg, marked export should not be available)
 
 (begin-for-syntax
   ;; A Functor is (functor Id (Listof Id) (Listof FunctorPart) Syntax)
@@ -121,6 +128,7 @@
         #`(begin #,ee (rename-exports explctx (x ...)))]
        [(k:define-values ~! (x:id ...) rhs:expr)
         #`(begin #,ee (rename-exports explctx (x ...)))]
+       ;; FIXME: detect require, provide, etc and error?
        [e:expr
         #'e])]))
 
