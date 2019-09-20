@@ -69,6 +69,7 @@
         [(_) base]
         [(_ e) (#%expression e)]
         [(_ e1 e ...) (ao2 e1 (ao e ...))]))
+    #:copy
     (define (aomap f xs)
       (if (pair? xs) (ao (f (car xs)) (aomap f (cdr xs))) base)))
   (provide f))
@@ -79,10 +80,10 @@
   (let ()
     (apply-functor f #:and [false base] [or ao2])
     (printf "(ao 1 2 #f (p 3)) w/ or = ~v\n" (ao 1 2 #f (p 3)))
-    (printf "(apmap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad))))
+    (printf "(aomap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad))))
   (let ()
     (apply-functor f #:and [true base] [and ao2])
     (printf "(ao 1 2 #f (p 3)) w/ and = ~v\n" (ao 1 2 #f (p 3)))
-    (printf "(apmap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad)))))
+    (printf "(aomap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad)))))
 
 (require 'u4)

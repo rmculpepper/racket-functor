@@ -68,38 +68,3 @@
       #`(#%plain-lambda (intro)
           (let-values ([(stxvar) (intro stxconstexp)] ...)
             expr)))))
-
-;; ============================================================
-
-;; A FunctorPart is one of
-;; - (stx-defs (Listof Identifier) ((Syntax -> Syntax) -> Syntax[Expr])
-;;   -- the proc represents the define-syntaxes RHS, processed with extract-syntax-constants
-;; - (val-defs (Listof Identifier) Syntax[Expr/ValueDefn]) -- represents either expr or define-values
-(struct stx-defs (exports proc) #:prefab)
-(struct val-defs (exports defs) #:prefab)
-
-;; process-functor-body : (Listof Syntax) IntDefCtx -> (Listof FunctorPart)
-(define (process-functor-body body-forms ctx)
-  (define ectx (list (gensym)))
-  (let loop ([body-forms body-forms])
-    (cond [(null? body-forms)
-           null]
-          [else
-           (define ee (local-expand (car body-forms) ectx #f ctx))
-           (syntax-parse ee
-             #:literal-sets (kernel-literals)
-             [(begin ~! e ...) (loop (append (syntax->list #'(e ...)) (cdr body-forms)))]
-             [(k:define-syntaxes ~! (x:id ...) rhs:expr)
-              (define erhs (local-transformer-expand #'rhs 'expression null ctx))
-              (syntax-local-bind-syntaxes (syntax->list #'(x ...)) erhs ctx)
-              (define erhs* (extract-syntax-constants erhs (add1 (syntax-local-phase-level))))
-              (cons #`(stx-defs (quote-syntax (x ...)) #,erhs*)
-                    (loop (cdr body-forms)))]
-             [(k:define-values ~! (x:id ...) rhs:expr)
-              (cons #`(val-defs (quote-syntax (x ...))
-                                (quote-syntax #,ee))
-                    (loop (cdr body-forms)))]
-             [expr
-              (cons #`(val-defs (quote-syntax ())
-                                (quote-syntax (#%expression #,ee)))
-                    (loop (cdr body-forms)))])])))

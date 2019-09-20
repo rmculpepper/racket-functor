@@ -70,6 +70,7 @@
         [(_) base]
         [(_ e) (#%expression e)]
         [(_ e1 e ...) (ao2 e1 (ao e ...))]))
+    #:copy
     (define (aomap f xs)
       (if (pair? xs) (ao (f (car xs)) (aomap f (cdr xs))) base)))
   (provide f))
