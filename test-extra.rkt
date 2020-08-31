@@ -8,10 +8,10 @@
 
 (module u1 racket/base
   (require "functor.rkt" (submod ".." f1))
-  (apply-functor f #:and [+ op])
+  (apply-functor f #:and [op +])
   (printf "(dop 12) w/ += ~v\n" (dop 12))
   (let ()
-    (apply-functor f #:and [* op])
+    (apply-functor f #:and [op *])
     (printf "(dop 12) w/ * = ~v\n" (dop 12))))
 
 (require 'u1)
@@ -32,7 +32,7 @@
   (printf "(myand 1 2 3) w/ if = ~v\n" (myand 1 2 #f (p 3)))
   (let ()
     (define (if* a b c) (if a b c))
-    (apply-functor f #:and [if* if])
+    (apply-functor f #:and [if if*])
     (printf "(myand 1 2 3) w/ if* = ~v\n" (myand 1 2 #f (p 3)))))
 
 (require 'u2)
@@ -50,11 +50,11 @@
   (require "functor.rkt" (submod ".." f3))
   (define (p x) (printf "got ~v; " x) x)
   (let ()
-    (apply-functor f #:and [if myif] [myand myand*])
+    (apply-functor f #:and [myif if] [myand* myand])
     (printf "(myand 1 2 (p 3)) rec = ~v\n" (myand 1 2 #f (p 3))))
   (let ()
     (define (if* a b c) (if a b c))
-    (apply-functor f #:and [if* myif] [myand myand*])
+    (apply-functor f #:and [myif if*] [myand* myand])
     (printf "(myand 1 2 (p 3)) strict rec = ~v\n" (myand 1 2 #f (p 3)))))
 
 (require 'u3)
@@ -78,11 +78,11 @@
   (require "functor.rkt" (submod ".." f4) racket/bool)
   (define (p x) (printf "got ~v; " x) x)
   (let ()
-    (apply-functor f #:and [false base] [or ao2])
+    (apply-functor f #:and [base false] [ao2 or])
     (printf "(ao 1 2 #f (p 3)) w/ or = ~v\n" (ao 1 2 #f (p 3)))
     (printf "(aomap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad))))
   (let ()
-    (apply-functor f #:and [true base] [and ao2])
+    (apply-functor f #:and [base true] [ao2 and])
     (printf "(ao 1 2 #f (p 3)) w/ and = ~v\n" (ao 1 2 #f (p 3)))
     (printf "(aomap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad)))))
 

@@ -1,5 +1,7 @@
 #lang racket/base
-(require (for-syntax racket/base syntax/parse racket/match syntax/stx racket/list "functor-util.rkt"))
+(require (for-syntax racket/base racket/match racket/list
+                     syntax/parse syntax/stx
+                     "functor-util.rkt"))
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -13,8 +15,8 @@
 ;; by default; a functor should have to opt in to allow them.
 
 ;; A (Syntax) Functor is written
-;; - (define-functor (f <sig-id>) def ...)
-;; - (apply-functor f <link-id> ... #:and [<extra-link-id> <extra-id>] ...)
+;; - (define-functor (f <import-id> ...) def ...)
+;; - (apply-functor f <link-id> ... #:and [<extra-import-id> <extra-link-id>] ...)
 
 ;; TODO:
 ;; - add by-name application?
@@ -45,7 +47,8 @@
                 (define erhs* (extract-syntax-constants erhs (add1 (syntax-local-phase-level))))
                 (cons #`(stx-defs (quote-syntax (x ...)) #,erhs*)
                       (loop (cdr body-forms)))]
-               [_ (raise-syntax-error #f "only syntax definitions allowed in functor body" fstx ee)])]))))
+               [_ (raise-syntax-error #f "only syntax definitions allowed in functor body"
+                                      fstx ee)])]))))
 
 (define-syntax (define-functor stx)
   (define-splicing-syntax-class copy-section
@@ -67,7 +70,7 @@
 
 (define-syntax (apply-functor stx)
   (define-splicing-syntax-class extra-imports
-    (pattern (~seq #:and [link:id import:id] ...))
+    (pattern (~seq #:and [import:id link:id] ...))
     (pattern (~seq) #:with (link ...) '() #:with (import ...) '()))
   (syntax-parse stx
     [(_ (~var fname (static functor? 'functor)) link:id ... extra:extra-imports)
@@ -76,7 +79,8 @@
      (define imports (syntax-local-introduce (functor-imports f)))
      (define intro2 (make-intdefs-syntax-introducer))
      (define imports-here (intro2 imports))
-     (define extra-imports-here (intro2 (datum->syntax implctx (syntax->datum #'(extra.import ...)))))
+     (define extra-imports-here
+       (intro2 (datum->syntax implctx (syntax->datum #'(extra.import ...)))))
      (with-syntax ([implctx-here (intro2 implctx)]
                    [(import-here ...) imports-here]
                    [(extra-import-here ...) extra-imports-here]
