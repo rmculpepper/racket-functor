@@ -24,8 +24,8 @@
 ;; - fix export renaming (eg, marked export should not be available)
 
 (begin-for-syntax
-  ;; A Functor is (functor Id (Listof Id) (Listof FunctorPart) Syntax)
-  (struct functor (implctx imports parts copy-form))
+  ;; A Functor is (functor Id (Listof Id) Boolean (Listof FunctorPart) Syntax)
+  (struct functor (implctx imports allow-implicit? parts copy-form))
 
   ;; A FunctorPart is (stx-defs (Listof Identifier) ((Syntax -> Syntax) -> Syntax[Expr]))
   ;; where the proc represents the define-syntaxes RHS, processed with extract-syntax-constants.
@@ -51,11 +51,14 @@
                                       fstx ee)])]))))
 
 (define-syntax (define-functor stx)
+  (define-splicing-syntax-class implicit-decl
+    (pattern (~seq #:allow-implicit) #:with allow-implicit? #'#t)
+    (pattern (~seq) #:with allow-implicit? #'#f))
   (define-splicing-syntax-class copy-section
     (pattern (~seq #:copy form:expr ...))
     (pattern (~seq) #:with (form ...) null))
   (syntax-parse stx
-    [(_ (f:id import:id ...) body:expr ... copy:copy-section)
+    [(_ (f:id import:id ... ai:implicit-decl) body:expr ... copy:copy-section)
      (define implctx (datum->syntax this-syntax 'import-here))
      (define ctx (syntax-local-make-definition-context))
      (syntax-local-bind-syntaxes (syntax->list #'(import ...)) #f ctx)
@@ -65,18 +68,21 @@
        #`(define-syntax f
            (functor (quote-syntax #,(intro1 implctx 'add))
                     (quote-syntax #,(intro1 #'(import ...) 'add))
+                    (quote ai.allow-implicit?)
                     (list part ...)
                     (quote-syntax #,(intro1 #'(begin copy.form ...) 'add)))))]))
 
 (define-syntax (apply-functor stx)
   (define-splicing-syntax-class extra-imports
-    (pattern (~seq #:and [import:id link:id] ...))
+    (pattern (~seq #:implicit [import:id link:id] ...))
     (pattern (~seq) #:with (link ...) '() #:with (import ...) '()))
   (syntax-parse stx
     [(_ (~var fname (static functor? 'functor)) link:id ... extra:extra-imports)
      (define f (attribute fname.value))
      (define implctx (syntax-local-introduce (functor-implctx f)))
      (define imports (syntax-local-introduce (functor-imports f)))
+     (unless (or (functor-allow-implicit? f) (null? (syntax->list #'(extra.import ...))))
+       (raise-syntax-error #f "functor does not allow implicit linkage" stx #'fname))
      (define intro2 (make-intdefs-syntax-introducer))
      (define imports-here (intro2 imports))
      (define extra-imports-here
