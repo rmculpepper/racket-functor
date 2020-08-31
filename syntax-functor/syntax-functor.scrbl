@@ -1,6 +1,6 @@
 #lang scribble/manual
 @(require racket/list scribble/example
-          (for-label racket/base))
+          (for-label racket/base syntax-functor))
 
 @title[#:tag "syntax-functor"]{Syntax Functors: Parameterized Sets of Macro Definitions}
 
