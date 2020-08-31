@@ -1,3 +1,6 @@
+;; Copyright 2019-2020 Ryan Culpepper
+;; Licensed under Apache 2.0.
+
 #lang racket/base
 (require racket/syntax syntax/parse
          (for-template racket/base))

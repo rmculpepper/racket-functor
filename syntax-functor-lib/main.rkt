@@ -1,7 +1,10 @@
+;; Copyright 2019-2020 Ryan Culpepper
+;; Licensed under Apache 2.0.
+
 #lang racket/base
 (require (for-syntax racket/base racket/match racket/list
                      syntax/parse syntax/stx
-                     "functor-util.rkt"))
+                     "private/functor-util.rkt"))
 (provide (all-defined-out))
 
 ;; ============================================================
@@ -16,7 +19,7 @@
 
 ;; A (Syntax) Functor is written
 ;; - (define-functor (f <import-id> ...) def ...)
-;; - (apply-functor f <link-id> ... #:and [<extra-import-id> <extra-link-id>] ...)
+;; - (apply-functor f <link-id> ... #:implicit [<imp-import-id> <imp-link-id>] ...)
 
 ;; TODO:
 ;; - add by-name application?
