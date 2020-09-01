@@ -2,15 +2,17 @@
 @(require racket/list scribble/example
           (for-label racket/base syntax-functor))
 
-@title[#:tag "syntax-functor"]{Syntax Functors: Parameterized Sets of Macro Definitions}
+@title[#:tag "syntax-functor"]{Syntax Functors: Parameterized Sets of Definitions}
 
 @(define the-eval (make-base-eval))
 @(the-eval '(require syntax-functor))
 
 @defmodule[syntax-functor]
 
-A @deftech{syntax functor} is a named set of macro definitions
-parameterized over the bindings of a given set of identifiers.
+A @deftech{syntax functor} is a named set of definitions parameterized
+over the bindings of a given set of identifiers. In particular, the
+functor can contain @emph{macro definitions} parameterized over
+references to other macros.
 
 For example, here is a syntax functor named @racket[myand-functor]
 parameterized by the identifier named @racket[myif]:
@@ -94,7 +96,7 @@ over the bindings of the @racket[import-id]s. If
 functor allows an application site to treat @emph{any} identifier as
 an implicit import.
 
-The @racket[body-forms] are partially expanded in order to uncover
+The @racket[body-form]s are partially expanded in order to uncover
 definitions and splice @racket[begin] forms. The partially expanded
 forms are handled as follows:
 @itemlist[
@@ -123,20 +125,20 @@ templates, and the expansion of the @racket[body-form]s must not
 depend on the imported bindings. For example, the following two
 functor definitions are not allowed:
 
-@racketblock[
-(define-functor (bad-functor define-macro) (code:comment "BAD")
-  (define-macro (thunk e) (lambda () e)))
-(define-functor (also-bad-functor define-thing) (code:comment "BAD")
-  (define-syntax-rule (mydefine x e) (define-thing x e))
-  (mydefine x 12))
+@examples[#:eval the-eval #:label #f
+(eval:error
+ (define-functor (bad-functor define-macro) (code:comment "BAD")
+   (define-macro (thunk e) (lambda () e))))
+(eval:error
+ (define-functor (also-bad-functor super) (code:comment "BAD")
+   (struct thing super (x y z))))
 ]
 
-Following the macro definitions is an optional ``copy'' section; any
+Following the @racket[body-form]s is an optional ``copy'' section; any
 forms following the @racket[#:copy] keyword are copied to the
 functor's application sites. This section may be used for syntax
 definitions that depend on the imported bindings, such as the examples
-above, or a struct definition that extends an imported super struct
-type.
+above.
 }
 
 @defform[(apply-functor functor-id link-id ... maybe-implicit-link)
@@ -144,12 +146,14 @@ type.
                      (code:line)
                      (code:line #:implicit [implicit-id implicit-link-id] ...)])]{
 
-Imports @racket[functor-id]'s definitions, where each of the functor's
-@racket[import-id]s is linked with the application's
-@racket[link-id]. If the functor allows implicit linking, then each
-@racket[implicit-id] is linked with the corresponding
-@racket[implicit-link-id] as if @racket[implicit-id] were listed in
-the functor's import list. If the functor does not allow implicit
-linking, then a syntax error is raised if there are any implicit
-linking clauses.
+Instantiates @racket[functor-id]'s definitions, where each of the
+functor's @racket[_import-id]s is linked with the application's
+corresponding @racket[link-id]. If @racket[apply-functor] is used in a
+context that does not allow definitions, a syntax error results.
+
+If the functor allows implicit linking, then each @racket[implicit-id]
+is linked with the corresponding @racket[implicit-link-id] as if
+@racket[implicit-id] were listed in the functor's import list. If the
+functor does not allow implicit linking, then a syntax error is raised
+if there are any implicit linking clauses.
 }
