@@ -37,20 +37,50 @@
   (struct stx-defs (exports proc) #:prefab)
   (struct copy-form (stx) #:prefab)
 
-  (define USE-NOPE-RENAME-TXS? #t)
+  ;; IMPORT-NOPE-MODE : (U 'macro 'opaque 'rename #f) -- #f means bind as variables
+  ;; The imported identifiers should not be *used* during the expansion of the
+  ;; functor body. There's no good robust way to enforce that, but there are
+  ;; some approximations:
+  ;;   (1) Bind the imports to macros that raise an error when they are
+  ;;       called. This misses dependencies via syntax-local-value, though.
+  ;;   (2) Bind the imports to opaque things. They won't work as references, but
+  ;;       we can't control the error message. Still allows syntax-local-value,
+  ;;       but result is not a procedure.
+  ;;   (3) Bind the imports to rename-transformers that raise an error when they
+  ;;       are called. (This catches dependencies via syntax-local-value too.)
+  ;;       There is a problem: The rename-transformer gets called once during
+  ;;       syntax-local-bind-syntaxes (to do free-id=? simplification, maybe?),
+  ;;       so we have to avoid that. FRAGILE!
+  ;;   (4) Alternatively, just bind them as variables. This catches fewer
+  ;;       improper dependencies, though.
+  (define IMPORT-NOPE-MODE 'macro)
+  (define in-bind? (make-parameter #f))
+
+  (struct functor-import (fstx id)
+    #:property prop:procedure
+    (lambda (self stx)
+      (raise-syntax-error #f "expansion of functor body depends on import"
+                          (functor-import-fstx self) stx)))
+
+  (struct opaque-functor-import ())
 
   (struct nope-rename-tx (fstx id)
     #:property prop:rename-transformer
     (lambda (self)
-      (raise-syntax-error #f "expansion of functor body depends on import"
-                          (nope-rename-tx-fstx self)
-                          (nope-rename-tx-id self))))
+      (if (in-bind?)
+          (syntax-property (datum->syntax #f 'INVALID) 'not-free-identifier=? #t)
+          (raise-syntax-error #f "expansion of functor body depends on import"
+                              (nope-rename-tx-fstx self)
+                              (nope-rename-tx-id self)))))
 
   (define (make-nope-txs args)
     (syntax-parse args
       [((import ...) fstx)
        (apply values (for/list ([import-id (in-list (syntax->list #'(import ...)))])
-                       (nope-rename-tx #'fstx import-id)))]))
+                       (case IMPORT-NOPE-MODE
+                         [(macro) (functor-import #'fstx import-id)]
+                         [(opaque) (opaque-functor-import)]
+                         [(rename) (nope-rename-tx #'fstx import-id)])))]))
 
   ;; process-body : (Listof Syntax) IntDefCtx -> (Listof Syntax[Expr[FunctorPart]])
   (define (process-body body-forms ctx fstx)
@@ -99,10 +129,11 @@
     [(_ (f:id import:id ... ai:implicit-decl) body:expr ... copy:copy-section)
      (define implctx (datum->syntax this-syntax 'import-here))
      (define ctx (syntax-local-make-definition-context))
-     (syntax-local-bind-syntaxes (syntax->list #'(import ...))
-                                 (and USE-NOPE-RENAME-TXS?
-                                      #`(make-nope-txs (quote-syntax ((import ...) #,stx))))
-                                 ctx)
+     (parameterize ((in-bind? #t))
+       (syntax-local-bind-syntaxes (syntax->list #'(import ...))
+                                   (and IMPORT-NOPE-MODE
+                                        #`(make-nope-txs (quote-syntax ((import ...) #,stx))))
+                                   ctx))
      (define intro1 (make-intdefs-syntax-introducer ctx))
      (define parts (process-body (syntax->list #'(body ...)) ctx stx))
      (with-syntax ([(part ...) parts]
