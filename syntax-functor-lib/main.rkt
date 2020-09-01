@@ -169,6 +169,12 @@
      (define f (attribute fname.value))
      (define implctx (syntax-local-introduce (functor-implctx f)))
      (define imports (syntax-local-introduce (functor-imports f)))
+     (let ([imports-ct (length (syntax->list imports))]
+           [links-ct (length (syntax->list #'(link ...)))])
+       (unless (= links-ct imports-ct)
+         (raise-syntax-error #f (format "functor arity mismatch\n  expected: ~s\n  given: ~s"
+                                        imports-ct links-ct)
+                             stx)))
      (unless (or (functor-allow-implicit? f) (null? (syntax->list #'(extra.import ...))))
        (raise-syntax-error #f "functor does not allow implicit linkage" stx #'fname))
      (define intro2 (make-intdefs-syntax-introducer))
