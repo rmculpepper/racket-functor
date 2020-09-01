@@ -27,14 +27,17 @@
 ;; - fix export renaming (eg, marked export should not be available)
 
 (begin-for-syntax
-  ;; A Functor is (functor Id (Listof Id) Boolean (Listof FunctorPart) Syntax)
-  (struct functor (implctx imports allow-implicit? parts copy-form))
+  ;; A Functor is (functor Id (Listof Id) Boolean (Listof FunctorPart))
+  (struct functor (implctx imports allow-implicit? parts) #:transparent)
 
-  ;; A FunctorPart is (stx-defs (Listof Identifier) ((Syntax -> Syntax) -> Syntax[Expr]))
-  ;; where the proc represents the define-syntaxes RHS, processed with extract-syntax-constants.
+  ;; A FunctorPart is one of
+  ;; - (stx-defs (Listof Identifier) ((Syntax -> Syntax) -> Syntax[Expr]))
+  ;;   where the proc is the define-syntaxes RHS, processed with extract-syntax-constants
+  ;; - (copy-form Syntax) -- for define-values, expressions
   (struct stx-defs (exports proc) #:prefab)
+  (struct copy-form (stx) #:prefab)
 
-  ;; process-body : (Listof Syntax) IntDefCtx -> (Listof FunctorPart)
+  ;; process-body : (Listof Syntax) IntDefCtx -> (Listof Syntax[Expr[FunctorPart]])
   (define (process-body body-forms ctx fstx)
     (define ectx (list (gensym)))
     (let loop ([body-forms body-forms])
@@ -50,8 +53,25 @@
                 (define erhs* (extract-syntax-constants erhs (add1 (syntax-local-phase-level))))
                 (cons #`(stx-defs (quote-syntax (x ...)) #,erhs*)
                       (loop (cdr body-forms)))]
+               [(k:define-values ~! (x:id ...) rhs:expr)
+                (syntax-local-bind-syntaxes (syntax->list #'(x ...)) #f ctx)
+                (cons #`(copy-form (quote-syntax #,ee))
+                      (loop (cdr body-forms)))]
+               [expr
+                (cons #`(copy-form (quote-syntax (#%expression expr)))
+                      (loop (cdr body-forms)))]
+               ;; Old case, now unreachable:
                [_ (raise-syntax-error #f "only syntax definitions allowed in functor body"
                                       fstx ee)])]))))
+
+;; Functor definition:
+;; - initial scope set DefInitScs
+;; - creates fresh (intdef) scope DefSc
+;; - imports are defined as variables in DefSc
+;;   (note: imports may have scopesets different from DefInitScs!)
+;; - DefSc is applied to the functor's forms
+;;   (note: forms may have scopesets different from DefInitScs!)
+;; - implctx is created with scopeset = DefInitScs + DefSc
 
 (define-syntax (define-functor stx)
   (define-splicing-syntax-class implicit-decl
@@ -67,13 +87,29 @@
      (syntax-local-bind-syntaxes (syntax->list #'(import ...)) #f ctx)
      (define intro1 (make-intdefs-syntax-introducer ctx))
      (define parts (process-body (syntax->list #'(body ...)) ctx stx))
-     (with-syntax ([(part ...) parts])
+     (with-syntax ([(part ...) parts]
+                   [to-copy (intro1 #'(begin copy.form ...) 'add)])
        #`(define-syntax f
            (functor (quote-syntax #,(intro1 implctx 'add))
                     (quote-syntax #,(intro1 #'(import ...) 'add))
                     (quote ai.allow-implicit?)
-                    (list part ...)
-                    (quote-syntax #,(intro1 #'(begin copy.form ...) 'add)))))]))
+                    (list part ... (copy-form (quote-syntax to-copy))))))]))
+
+;; Functor application:
+;; - initial scopeset AppInitScs
+;; - creates a new (intdef) scope AppSc
+;; - fetch implctx, imports from functor (have their original scopes + DefSc)
+;; - create implctx-here = apply AppSc to implctx
+;;   Can recover AppSc as delta of implctx-here from implctx.
+;; - create imports-here = apply AppSc to imports
+;;   If AppSc is also applied to functor body, then binding import-here will
+;;   capture references to import in body.
+;; - exports-here have scopes DefInitScs + AppSc (??)
+;; - create exports w/ scopes AppInitSc
+
+;; Note: imports-here also get a scope from enclosing module/defctx!
+;; So delay scope math until expander adds scope --- that is, delay
+;; until rhs of define-syntaxes.
 
 (define-syntax (apply-functor stx)
   (define-splicing-syntax-class extra-imports
@@ -94,8 +130,7 @@
                    [(import-here ...) imports-here]
                    [(extra-import-here ...) extra-imports-here]
                    [explctx (datum->syntax this-syntax 'export-here)]
-                   [(index ...) (range (length (functor-parts f)))]
-                   [copy-form (intro2 (syntax-local-introduce (functor-copy-form f)))])
+                   [(index ...) (range (length (functor-parts f)))])
        #`(begin
            ;; Compared to imports, imports-here has scope from intro2 but also gets scope from
            ;; enclosing module (or local definition context, etc). See also apply-functor-part.
@@ -103,8 +138,7 @@
              (values (make-rename-transformer (quote-syntax link)) ...))
            (define-syntaxes (extra-import-here ...)
              (values (make-rename-transformer (quote-syntax extra.link)) ...))
-           (apply-functor-part fname explctx implctx-here index) ...
-           (copy-functor-part fname explctx implctx-here copy-form)))]))
+           (apply-functor-part fname explctx implctx-here index) ...))]))
 
 (define-syntax apply-functor-part
   (syntax-parser
@@ -120,7 +154,10 @@
               (define-syntaxes (export-here ...)
                 (link-stx-defs (quote-syntax fname) (quote-syntax implctx-here) (quote index)))
               (define-syntaxes (export* ...)
-                (values (make-rename-transformer (quote-syntax export-here)) ...))))])]))
+                (values (make-rename-transformer (quote-syntax export-here)) ...))))]
+       [(copy-form form-stx)
+        (with-syntax ([form (intro (syntax-local-introduce form-stx))])
+          #`(copy-functor-part fname explctx implctx-here form))])]))
 
 (begin-for-syntax
   (define (link-stx-defs functor-id implctx-here index)
@@ -143,7 +180,7 @@
         #`(begin #,ee (rename-exports explctx (x ...)))]
        ;; FIXME: detect require, provide, etc and error?
        [e:expr
-        #'e])]))
+        #'(#%expression e)])]))
 
 (define-syntax (rename-exports stx)
   (syntax-parse stx

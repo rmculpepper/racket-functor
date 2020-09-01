@@ -87,3 +87,21 @@
     (printf "(apmap odd? '(1 2 bad)) = ~v\n" (aomap odd? '(1 2 bad)))))
 
 (require 'u4)
+
+;; ----
+
+(module u5 racket/base
+  (require syntax-functor)
+
+  (define-functor (f x)
+    (define-syntax-rule (mx) x)
+    (define xx (+ (mx) (mx))))
+
+  (let ([one 1])
+    (apply-functor f one)
+    (println xx))
+  (let ([two 2])
+    (apply-functor f two)
+    (println xx)))
+
+(require 'u5)
