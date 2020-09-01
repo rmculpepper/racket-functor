@@ -37,6 +37,21 @@
   (struct stx-defs (exports proc) #:prefab)
   (struct copy-form (stx) #:prefab)
 
+  (define USE-NOPE-RENAME-TXS? #t)
+
+  (struct nope-rename-tx (fstx id)
+    #:property prop:rename-transformer
+    (lambda (self)
+      (raise-syntax-error #f "expansion of functor body depends on import"
+                          (nope-rename-tx-fstx self)
+                          (nope-rename-tx-id self))))
+
+  (define (make-nope-txs args)
+    (syntax-parse args
+      [((import ...) fstx)
+       (apply values (for/list ([import-id (in-list (syntax->list #'(import ...)))])
+                       (nope-rename-tx #'fstx import-id)))]))
+
   ;; process-body : (Listof Syntax) IntDefCtx -> (Listof Syntax[Expr[FunctorPart]])
   (define (process-body body-forms ctx fstx)
     (define ectx (list (gensym)))
@@ -84,7 +99,10 @@
     [(_ (f:id import:id ... ai:implicit-decl) body:expr ... copy:copy-section)
      (define implctx (datum->syntax this-syntax 'import-here))
      (define ctx (syntax-local-make-definition-context))
-     (syntax-local-bind-syntaxes (syntax->list #'(import ...)) #f ctx)
+     (syntax-local-bind-syntaxes (syntax->list #'(import ...))
+                                 (and USE-NOPE-RENAME-TXS?
+                                      #`(make-nope-txs (quote-syntax ((import ...) #,stx))))
+                                 ctx)
      (define intro1 (make-intdefs-syntax-introducer ctx))
      (define parts (process-body (syntax->list #'(body ...)) ctx stx))
      (with-syntax ([(part ...) parts]
