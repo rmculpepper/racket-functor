@@ -83,7 +83,7 @@ choose any identifier to be linked as if it were an import.
 @; ------------------------------------------------------------
 
 @defform[(define-functor (functor-id import-id ... maybe-implicit)
-           macro-def ...
+           body-form ...
            maybe-copy)
          #:grammar ([maybe-implicit (code:line) (code:line #:allow-implicit)]
                     [maybe-copy (code:line) (code:line #:copy copy-form ...)])]{
@@ -94,10 +94,32 @@ over the bindings of the @racket[import-id]s. If
 functor allows an application site to treat @emph{any} identifier as
 an implicit import.
 
-The @racket[macro-def]s are the functor's macro definitions. Each
-@racket[macro-def] is fully expanded when the functor is
-defined. References to imported identifiers are only allowed in syntax
-templates, and the expansion of the @racket[macro-def]s must not
+The @racket[body-forms] are partially expanded in order to uncover
+definitions and splice @racket[begin] forms. The partially expanded
+forms are handled as follows:
+@itemlist[
+
+@item{For a syntax definition (@racket[define-syntaxes]), the
+right-hand side is fully expanded, then it is transformed so that when
+the functor is applied the syntax definition can be linked without
+copying its code. The definition is also evaluated so it can be used
+for the expansion of the rest of the functor body.}
+
+@item{For a value definition (@racket[define-values]), the defined
+identifiers are registered as variables, but the right-hand side is
+left unexpanded, because its expansion may depend on the bindings of
+the functor's imports. The entire definition will be copied to each
+functor application site.}
+
+@item{Anything else is considered an expression. Like a value
+definition, the entire expression will be copied to each functor
+application site. Module-level forms such as @racket[require] and
+@racket[provide] are not allowed in a functor body.}
+
+]
+
+A syntax definition may refer to imported identifiers only in syntax
+templates, and the expansion of the @racket[body-form]s must not
 depend on the imported bindings. For example, the following two
 functor definitions are not allowed:
 
@@ -111,7 +133,10 @@ functor definitions are not allowed:
 
 Following the macro definitions is an optional ``copy'' section; any
 forms following the @racket[#:copy] keyword are copied to the
-functor's application sites.
+functor's application sites. This section may be used for syntax
+definitions that depend on the imported bindings, such as the examples
+above, or a struct definition that extends an imported super struct
+type.
 }
 
 @defform[(apply-functor functor-id link-id ... maybe-implicit-link)
